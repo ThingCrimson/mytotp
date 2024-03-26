@@ -18,7 +18,7 @@ if [ ! -f "${KEYDIR}/${SERVID}${KEYEXT}" ] ; then
   exit 1
 fi
 
-OKEY=$(gpg -d --quiet "${KEYDIR}/${SERVID}${KEYEXT}")
+SKEY=$(gpg -d --quiet "${KEYDIR}/${SERVID}${KEYEXT}")
 
 NOWS=$(date +'%S')
 WAIT=$((60 - NOWS))
@@ -28,10 +28,9 @@ fi
 echo -n "Seconds :${NOWS} (wait ${WAIT}) ... "
 sleep ${WAIT}
 
-OATH=$(echo "${OKEY}" | oathtool -b --totp - )
+TOTP=$(echo "${SKEY}" | oathtool -b --totp - )
 
-echo "${OATH}"
-OKEY="none"
+echo "${TOTP}"
+SKEY="none"
 
 exit 0
-
