@@ -1,7 +1,10 @@
 # this code is a fork of https://github.com/ThingCrimson/mytotp
-# put this file in path and source it in .bashrc or .zshrc
-# add next line to .bashrc or .zshrc
-# source mytotp.sh
+# put this file in ~ path and source it in .bashrc or .zshrc 
+# if [ -f $HOME/.mytotp.rc ]; then
+#    . $HOME/.mytotp.rc
+# fi
+# or add next line to .bashrc or .zshrc
+# source /path/to/somewhere/mytotp.rc
 # create a directory for the keys ~/.config/mytotp
 # usage, mannually creating SERVID.gpg file:
 # Put TOTP key for service SERVID to GPG file crypted for '\''My TOTP'\''
