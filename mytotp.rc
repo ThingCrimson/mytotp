@@ -1,7 +1,7 @@
 # this code is a fork of https://github.com/ThingCrimson/mytotp
-# put this file in ~ path and source it in .bashrc or .zshrc 
-# if [ -f $HOME/.mytotp.rc ]; then
-#    . $HOME/.mytotp.rc
+# put this file in ~ path and source it in .bashrc or .zshrc
+# if [ -f $HOME/mytotp.rc ]; then
+#    . $HOME/mytotp.rc
 # fi
 # or add next line to .bashrc or .zshrc
 # source /path/to/somewhere/mytotp.rc
@@ -15,30 +15,47 @@
 # mytotpadd SERVID
 # usage, listing all SERVIDs:
 # mytotplist
-function mytotp() {  
-    if ! command -v oathtool &> /dev/null
-  then
+
+KEYDIR=~/.config/mytotp
+KEYEXT=.gpg
+
+function mytotp() {
+  SERVID=$1
+  if ! command -v oathtool &>/dev/null; then
     echo "oathtool could not be found"
     echo "Please install it with: brew install oath-toolkit"
+    echo "or check further  https://launchpad.net/oath-toolkit/+packages && https://www.nongnu.org/oath-toolkit/"
     return 1
   fi
 
-  KEYDIR=~/.config/mytotp
-  KEYEXT=.gpg
-  SERVID=$1
+  if [ "$(uname)" == "Darwin" ]; then
+    PASTECOMMAND="pbpaste"
+  fi
 
-  if [ -z "${SERVID}" ] ; then
+  if [ "$(uname)" == "Linux" ]; then
+    if ! command -v xclip &>/dev/null; then
+      echo "xclip could not be found. It is an optional tool for reading the initial key from the clipboard."
+      echo "If you want to use this optional feature, please install it with: sudo apt-get install xclip"
+      read -p "Do you want to continue without xclip? (y/n) " yn
+      case $yn in
+      [Yy]*) ;;
+      [Nn]*) return 1 ;;
+      *) echo "Please answer yes or no." ;;
+      esac
+    fi
+    PASTECOMMAND="xclip -o"
+  fi
+
+  if [ -z "${SERVID}" ]; then
     echo -e "Usage: $0 SERVID\n\tSERVID is a service ID, abbreviated, w/o ext:"
     find ${KEYDIR}/*${KEYEXT} | sed -e 's/\/home.*\//  /; s/\.gpg//'
     return 2
   fi
 
-  if [ ! -f "${KEYDIR}/${SERVID}${KEYEXT}" ] ; then
+  if [ ! -f "${KEYDIR}/${SERVID}${KEYEXT}" ]; then
     echo "No key for ${KEYDIR}/${SERVID}${KEYEXT}"
     return 1
   fi
-
-
 
   SKEY=$(gpg -d --quiet "${KEYDIR}/${SERVID}${KEYEXT}")
 
@@ -50,7 +67,7 @@ function mytotp() {
   echo -n "Seconds :${NOWS} (we need to wait ${WAIT}) ... "
   sleep ${WAIT}
 
-  TOTP=$(echo "${SKEY}" | oathtool -b --totp - )
+  TOTP=$(echo "${SKEY}" | oathtool -b --totp -)
 
   echo "${TOTP}"
   SKEY="none"
@@ -60,22 +77,59 @@ function mytotp() {
 # add new SERVID to GPG file in ~/.config/mytotp/SERVID.gpg
 # paste the key in the prompt and press enter, then $SERVID.gpg will be created
 function mytotpadd() {
+  SERVID=$1
+  # Check if "My TOTP" GPG key exists
+  if ! gpg --list-keys "My TOTP" >/dev/null 2>&1; then
+    echo "GPG key 'My TOTP' does not exist. Please create it first."
+    # ask user  if they want to create the key
+    read -p "Do you want to create the key 'My TOTP' now ? (y/n) " yn
+    case $yn in
+    [Yy]*)
+      echo "Write and remember the password for 'My TOTP' gpg key in the next line:"
+      gpg --yes --batch --passphrase-fd 0 --quick-generate-key 'My TOTP'
+      ;;
+    [Nn]*) return 1 ;;
+    *) echo "Please answer yes or no." ;;
+    esac
+    echo "get back with further usage: mytotpadd <SERVID>"
+    return
+  fi
+
   # if no $1 supplied, exit
-  if [ -z "$1" ] ; then
+  if [ -z "$1" ]; then
     echo -e "Usage: $0 SERVID\n\tSERVID is a service ID, abbreviated, w/o ext:"
     return 1
   fi
-  KEYDIR=~/.config/mytotp
-  KEYEXT=.gpg
-  SERVID=$1
+
   # print user instruction about press control-D to stop gpg"
   echo "Paste the key in the prompt, press enter, and then press control-D to stop gpg"
   gpg -e -r "My TOTP" >~/.config/mytotp/$SERVID.gpg
+  # if you want paste again the key, this way it would be stored in ~/.config/mytotp/SERVIDS.keys.lst file
+  read -p "Do you want to store the initial service key in ~/.config/mytotp/${SERVID}.key.asc? warn: it is unsafe (y/n)" yn
+  case $yn in
+  # read from clipboard with xclip
+  [Yy]*) $PASTECOMMAND >>~/.config/mytotp/${SERVID}.key.asc ;;
+  [Nn]*) return ;;
+  *) echo "Please answer yes or no." ;;
+  esac
 }
 
 # function to list all SERVIDs in ~/.config/mytotp
 function mytotplist() {
-  KEYDIR=~/.config/mytotp
-  KEYEXT=.gpg
-  find ${KEYDIR}/*${KEYEXT} | sed -e 's/\/home.*\//  /; s/\.gpg//'
+  if [ ! -d "${KEYDIR}" ]; then
+    read -p "Directory ${KEYDIR} does not exist. Do you want to create it? (y/n) " yn
+    case $yn in
+    [Yy]*) mkdir -p "${KEYDIR}" ;;
+    [Nn]*) return ;;
+    *) echo "Please answer yes or no." ;;
+    esac
+  fi
+
+  ENTRIES=$(find ${KEYDIR}/*${KEYEXT} 2>/dev/null | sed -e 's/\/home.*\//  /; s/\.gpg//')
+
+  if [ -z "$ENTRIES" ]; then
+    echo "Warning: No SERVID entries found."
+  else
+    echo "$ENTRIES"
+  fi
 }
