@@ -1,4 +1,11 @@
+#!/bin/bash
 # this code is a fork of https://github.com/ThingCrimson/mytotp
+# there are prerequisites to use this code:
+# 1. gpg
+# 2. oathtool
+# 3. xclip (optional, for Linux only) or pbpaste (it is included in MacOS)
+# 4. that for MacOS only bash 5.2.26, if you have older version that is default case for MacOS, please upgrade it with brew or use previous version of script,
+#    see this repo releases for MacOS standard bash
 # put this file in ~ path and source it in .bashrc or .zshrc
 # if [ -f $HOME/mytotp.rc ]; then
 #    . $HOME/mytotp.rc
@@ -15,12 +22,37 @@
 # mytotpadd SERVID
 # usage, listing all SERVIDs:
 # mytotplist
-
 KEYDIR=~/.config/mytotp
 KEYEXT=.gpg
+if [ "$(uname)" == "Darwin" ]; then
+  PASTECOMMAND="pbpaste"
+  # make check of bash version, if it is even to 3.2.57 then show warning and instructions how to upgrade shell to bash 5.2.26 with brew, then exit with code 1
+  if [ "$(echo $BASH_VERSION | awk -F. '{print $1}')" -eq 3 ] && [ "$(echo $BASH_VERSION | awk -F. '{print $2}')" -eq 2 ] && [ "$(echo $BASH_VERSION | awk -F. '{print $3}')" -eq 57 ]; then
+    echo "Your MacOS bash version is too old, please upgrade it to 5.2.26 with brew, following these steps"
+    echo "brew install bash"
+    echo "sudo ln -s /opt/homebrew/bin/bash /usr/local/bin/bash "
+    echo "sudo bash -c 'echo /usr/local/bin/bash >> /etc/shells'"
+    echo "optional step to change default zsh to bash, not really needed: chsh -s /usr/local/bin/bash"
+    return 1
+  fi
+fi
+if [ "$(uname)" == "Linux" ]; then
+  if ! command -v xclip &>/dev/null; then
+    echo "xclip could not be found. It is an optional tool for reading the initial key from the clipboard."
+    echo "If you want to use this optional feature, please install it with: sudo apt-get install xclip"
+    read -p "Do you want to continue without xclip? (y/n) " yn
+    case $yn in
+    [Yy]*) ;;
+    [Nn]*) return 1 ;;
+    *) echo "Please answer yes or no." ;;
+    esac
+  fi
+  PASTECOMMAND="xclip -o"
+fi
 
 function mytotp() {
   SERVID=$1
+
   if ! command -v oathtool &>/dev/null; then
     echo "oathtool could not be found"
     echo "Please install it with: brew install oath-toolkit"
@@ -28,28 +60,11 @@ function mytotp() {
     return 1
   fi
 
-  if [ "$(uname)" == "Darwin" ]; then
-    PASTECOMMAND="pbpaste"
-  fi
-
-  if [ "$(uname)" == "Linux" ]; then
-    if ! command -v xclip &>/dev/null; then
-      echo "xclip could not be found. It is an optional tool for reading the initial key from the clipboard."
-      echo "If you want to use this optional feature, please install it with: sudo apt-get install xclip"
-      read -p "Do you want to continue without xclip? (y/n) " yn
-      case $yn in
-      [Yy]*) ;;
-      [Nn]*) return 1 ;;
-      *) echo "Please answer yes or no." ;;
-      esac
-    fi
-    PASTECOMMAND="xclip -o"
-  fi
-
-  if [ -z "${SERVID}" ]; then
-    echo -e "Usage: $0 SERVID\n\tSERVID is a service ID, abbreviated, w/o ext:"
-    find ${KEYDIR}/*${KEYEXT} | sed -e 's/\/home.*\//  /; s/\.gpg//'
-    return 2
+  if [ -z "$1" ]; then
+    echo "mytotp version 1.0.0.rc"
+    echo "Usage: mytotp SERVID"
+    echo "SERVID is a service ID, abbreviated, that you provided for mytotpadd before, check all with mytotplist command"
+    return 1
   fi
 
   if [ ! -f "${KEYDIR}/${SERVID}${KEYEXT}" ]; then
@@ -105,9 +120,10 @@ function mytotpadd() {
   echo "Paste the key in the prompt, press enter, and then press control-D to stop gpg"
   gpg -e -r "My TOTP" >~/.config/mytotp/$SERVID.gpg
   # if you want paste again the key, this way it would be stored in ~/.config/mytotp/SERVIDS.keys.lst file
-  read -p "Do you want to store the initial service key in ~/.config/mytotp/${SERVID}.key.asc? warn: it is unsafe (y/n)" yn
-  case $yn in
   # read from clipboard with xclip
+  echo "Do you want to store the initial service key in .key.asc? Warn: it is unsafe (y/n) "
+  read -p "y/n " byn
+  case $byn in
   [Yy]*) $PASTECOMMAND >>~/.config/mytotp/${SERVID}.key.asc ;;
   [Nn]*) return ;;
   *) echo "Please answer yes or no." ;;
